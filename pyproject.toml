@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.8,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "polars-list-zip-struct"
 version = "0.1.0"
-description = "Python fallback for Polars list.zip returning list[struct]."
+description = "Native Polars expression plugin for list.zip returning list[struct]."
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{ name = "rufrozen" }]
@@ -13,6 +13,7 @@ keywords = ["polars", "list", "zip", "struct", "plugin"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",
@@ -22,18 +23,19 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["polars>=1.0.0"]
+dependencies = ["polars>=1.42.0,<1.43.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
-publish = ["build>=1.2", "twine>=5"]
+dev = ["maturin>=1.8,<2.0", "pytest>=8"]
+publish = ["maturin>=1.8,<2.0", "twine>=5"]
 
 [project.urls]
 Homepage = "https://github.com/rufrozen/polars-list-zip-struct"
 Issues = "https://github.com/rufrozen/polars-list-zip-struct/issues"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.maturin]
+python-source = "src"
+module-name = "polars_list_zip_struct"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -2,21 +2,24 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from itertools import zip_longest
+from pathlib import Path
 from typing import Any
 
 import polars as pl
 from polars._utils.wrap import wrap_expr
+from polars.plugins import register_plugin_function
 
 IntoExpr = Any
 
 _INPUT_PREFIX = "__polars_list_zip_struct_input_"
+_LIB = Path(__file__).parent
+_NATIVE_EXTENSIONS = {".so", ".pyd", ".dll", ".dylib"}
 
 
 def zip_list(
     *exprs: IntoExpr,
     pad: bool = False,
     fields: Sequence[str] | None = None,
-    return_dtype: Any | None = None,
 ) -> pl.Expr:
     """Zip list expressions into a ``list[struct]`` expression.
 
@@ -28,9 +31,7 @@ def zip_list(
         If false, truncate to the shortest list. If true, pad shorter lists with
         nulls to match the longest list.
     fields
-        Optional struct field names. Defaults to ``field_0``, ``field_1``, ...
-    return_dtype
-        Optional Polars return dtype for ``Expr.map_elements``.
+        Optional struct field names. Defaults to the input expression names.
     """
     if not isinstance(pad, bool):
         msg = "pad must be a bool"
@@ -39,8 +40,19 @@ def zip_list(
         msg = "zip_list requires at least two list expressions"
         raise ValueError(msg)
 
+    field_names = _normalize_fields(fields, len(exprs))
+    if _native_library_available():
+        return register_plugin_function(
+            plugin_path=_LIB,
+            function_name="list_zip",
+            args=list(exprs),
+            kwargs={"pad": pad, "fields": field_names},
+            is_elementwise=True,
+            use_abs_path=True,
+        )
+
     parsed_exprs = [_parse_into_expr(expr) for expr in exprs]
-    field_names = _normalize_fields(fields, len(parsed_exprs))
+    fallback_field_names = field_names or _default_field_names(exprs, parsed_exprs)
     aliases = [f"{_INPUT_PREFIX}{i}" for i in range(len(parsed_exprs))]
 
     row_expr = pl.struct(
@@ -62,7 +74,7 @@ def zip_list(
             if pad
             else zip(*values)
         )
-        return [dict(zip(field_names, values_row)) for values_row in rows]
+        return [dict(zip(fallback_field_names, values_row)) for values_row in rows]
 
     return row_expr.map_elements(
         zip_row,
@@ -87,16 +99,12 @@ def _expr_list_zip(
     other: IntoExpr,
     *,
     pad: bool = False,
-    fields: Sequence[str] | None = None,
-    return_dtype: Any | None = None,
 ) -> pl.Expr:
     base_expr = wrap_expr(self._pyexpr)
     return zip_list(
         base_expr,
         other,
         pad=pad,
-        fields=fields,
-        return_dtype=return_dtype,
     )
 
 
@@ -111,9 +119,9 @@ def _parse_into_expr(expr: IntoExpr) -> pl.Expr:
 def _normalize_fields(
     fields: Sequence[str] | None,
     width: int,
-) -> list[str]:
+) -> list[str] | None:
     if fields is None:
-        return [f"field_{i}" for i in range(width)]
+        return None
     if isinstance(fields, str):
         msg = "fields must be a sequence of strings, not a single string"
         raise TypeError(msg)
@@ -137,3 +145,27 @@ def _row_values(row: Any, aliases: Sequence[str]) -> list[Any]:
     if isinstance(row, Mapping):
         return [row[alias] for alias in aliases]
     return list(row)
+
+
+def _default_field_names(
+    exprs: Sequence[IntoExpr],
+    parsed_exprs: Sequence[pl.Expr],
+) -> list[str]:
+    names: list[str] = []
+    for index, (expr, parsed_expr) in enumerate(zip(exprs, parsed_exprs)):
+        if isinstance(expr, str):
+            names.append(expr)
+            continue
+
+        try:
+            names.append(parsed_expr.meta.output_name())
+        except Exception:
+            names.append(f"field_{index}")
+    return names
+
+
+def _native_library_available() -> bool:
+    return any(
+        path.is_file() and path.suffix in _NATIVE_EXTENSIONS
+        for path in _LIB.iterdir()
+    )

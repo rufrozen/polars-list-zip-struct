@@ -4,6 +4,7 @@ import pytest
 
 import polars as pl
 import polars_list_zip_struct  # noqa: F401
+from polars_list_zip_struct import _core
 from polars_list_zip_struct import zip_list
 
 
@@ -21,12 +22,12 @@ def test_list_zip_matches_issue_example() -> None:
 
     assert out["zipped"].to_list() == [
         [
-            {"field_0": 1, "field_1": 10},
-            {"field_0": 2, "field_1": 20},
+            {"a": 1, "b": 10},
+            {"a": 2, "b": 20},
         ],
-        [{"field_0": 3, "field_1": 30}],
+        [{"a": 3, "b": 30}],
         None,
-        [{"field_0": None, "field_1": 35}],
+        [{"a": None, "b": 35}],
     ]
 
 
@@ -59,7 +60,7 @@ def test_pad_true_matches_longest_list() -> None:
 
     out = df.with_columns(
         pl.col("a")
-        .list.zip(pl.col("b"), pad=True, fields=["a", "b"])
+        .list.zip(pl.col("b"), pad=True)
         .alias("zipped")
     )
 
@@ -76,7 +77,7 @@ def test_lazy_frame_usage() -> None:
     out = df.lazy().with_columns(pl.zip_list("a", "b").alias("z")).collect()
 
     assert out["z"].to_list() == [
-        [{"field_0": 1, "field_1": "x"}, {"field_0": 2, "field_1": "y"}]
+        [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]
     ]
 
 
@@ -95,3 +96,17 @@ def test_validation_errors() -> None:
 
     with pytest.raises(TypeError, match="bool"):
         zip_list("a", "b", pad="yes")  # type: ignore[arg-type]
+
+
+@pytest.mark.skipif(
+    not _core._native_library_available(),
+    reason="native plugin has not been built",
+)
+def test_native_plugin_errors() -> None:
+    df = pl.DataFrame({"a": [[1, 2]], "not_list": [1]})
+
+    with pytest.raises(pl.exceptions.ComputeError, match="has more than one occurrence"):
+        df.select(pl.col("a").list.zip(pl.col("a")))
+
+    with pytest.raises(pl.exceptions.ComputeError, match="expected `List`"):
+        df.select(pl.col("a").list.zip(pl.col("not_list")))

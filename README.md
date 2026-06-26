@@ -1,6 +1,6 @@
 # polars-list-zip-struct
 
-`polars-list-zip-struct` is a tiny Python fallback for the accepted Polars
+`polars-list-zip-struct` is a native expression plugin for the accepted Polars
 `list.zip` proposal from [pola-rs/polars#22719](https://github.com/pola-rs/polars/issues/22719).
 
 It adds:
@@ -10,7 +10,8 @@ It adds:
 
 Both return a `list[struct]` expression. By default, lists are truncated to the
 shortest input, like Python's `zip`. With `pad=True`, shorter lists are padded
-with nulls to match the longest input.
+with nulls to match the longest input. Struct fields default to the input
+column/expression names, matching the upstream Polars pull request.
 
 If a future Polars release ships native `list.zip` or `pl.zip_list`, this package
 leaves the native implementation untouched.
@@ -73,14 +74,16 @@ df.with_columns(
 
 ## Notes
 
-This is a Python expression fallback built with `Expr.map_elements`, so it is
-slower than a native Polars implementation. It is intended as a compatibility
-package until the accepted feature lands upstream.
+The core implementation is a Rust Polars expression plugin built with
+`pyo3-polars`. It follows the original upstream implementation idea: build a
+`LargeListArray` of `StructArray` values with Arrow builders, offsets, and row
+validity, rather than running a Python row loop.
 
 ## Development
 
 ```bash
 python -m pip install -e ".[dev]"
+maturin develop
 python -m pytest
 ```
 
@@ -88,6 +91,6 @@ Build and upload:
 
 ```bash
 python -m pip install ".[publish]"
-python -m build
-python -m twine upload dist/*
+maturin build --release
+python -m twine upload target/wheels/*
 ```
