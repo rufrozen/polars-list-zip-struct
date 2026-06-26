@@ -78,7 +78,7 @@ def zip_list(
 
     return row_expr.map_elements(
         zip_row,
-        return_dtype=return_dtype,
+        return_dtype=None,
         skip_nulls=False,
     )
 

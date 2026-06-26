@@ -98,6 +98,20 @@ def test_validation_errors() -> None:
         zip_list("a", "b", pad="yes")  # type: ignore[arg-type]
 
 
+def test_python_fallback_when_native_library_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_core, "_native_library_available", lambda: False)
+    df = pl.DataFrame({"a": [[1], []], "b": [[10, 20], [30]]})
+
+    out = df.with_columns(pl.zip_list("a", "b", pad=True).alias("zipped"))
+
+    assert out["zipped"].to_list() == [
+        [{"a": 1, "b": 10}, {"a": None, "b": 20}],
+        [{"a": None, "b": 30}],
+    ]
+
+
 @pytest.mark.skipif(
     not _core._native_library_available(),
     reason="native plugin has not been built",

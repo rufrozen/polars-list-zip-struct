@@ -22,6 +22,10 @@ leaves the native implementation untouched.
 pip install polars-list-zip-struct
 ```
 
+The package supports Polars releases from roughly the last three months onward
+and does not cap future Polars versions. For this release that means
+`polars>=1.39.3`.
+
 ## Usage
 
 Import the package once to register the Polars helpers:
